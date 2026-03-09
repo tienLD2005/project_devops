@@ -14,7 +14,7 @@ interface Todo {
 const getSampleTodos = (): Todo[] => [
   {
     id: '1',
-    text: 'Hoàn thành báo cáo hàng tuần',
+    text: 'HÊHHEHEHEHEHEHEE',
     completed: false,
     priority: 'high',
     dueDate: '2026-03-15',
