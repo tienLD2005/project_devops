@@ -1,0 +1,18 @@
+version: "3.9"
+
+# For local development only
+# Production uses: docker run -d -p 3004:80 --name taskflow-app taskflow-app:latest
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taskflow_fe
+    ports:
+      - "3000:80"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    labels:
+      - "com.taskflow.description=TaskFlow Frontend Application"

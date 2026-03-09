@@ -1,0 +1,106 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+      - production
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_SERVER_IP }}
+          username: ${{ secrets.PROD_SERVER_USER }}
+          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
+          port: 22
+          script: |
+            set -e
+
+            echo "🚀 Starting deployment..."
+
+            # Navigate to app directory
+            if [ ! -d "~/app" ]; then
+              echo "📁 Creating app directory..."
+              mkdir -p ~/app
+            fi
+
+            cd ~/app
+
+            # Pull latest code
+            echo "📥 Pulling latest code..."
+            if [ ! -d ".git" ]; then
+              git clone ${{ github.server_url }}/${{ github.repository }}.git .
+            else
+              git pull origin main || git pull
+            fi
+
+            # Stop and remove old container
+            echo "🛑 Stopping old container..."
+            docker stop taskflow-app || true
+            docker rm taskflow-app || true
+
+            # Build Docker image
+            echo "🔨 Building Docker image..."
+            docker build -t taskflow-app:latest .
+
+            # Run new container
+            echo "🚀 Starting new container..."
+            docker run -d \
+              --name taskflow-app \
+              -p 3004:80 \
+              --restart unless-stopped \
+              taskflow-app:latest
+
+            # Wait for container to start
+            sleep 3
+
+            echo "✅ Docker container started successfully"
+            docker ps | grep taskflow-app
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_SERVER_IP }}
+          username: ${{ secrets.PROD_SERVER_USER }}
+          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
+          port: 22
+          script: |
+            echo "🔍 Verifying deployment..."
+
+            # Check container is running
+            if docker ps | grep -q taskflow-app; then
+              echo "✅ Container is running"
+            else
+              echo "❌ Container failed to start"
+              exit 1
+            fi
+
+            # Wait a bit for app to fully start
+            sleep 2
+
+            # Test endpoint
+            if curl -f http://localhost:3004/ > /dev/null 2>&1; then
+              echo "✅ Application is responding"
+              echo "✅ Deployment successful!"
+              echo "🌐 Access at: http://le-dien-tien.rikkeieducation.com"
+            else
+              echo "❌ Application is not responding"
+              docker logs taskflow-app
+              exit 1
+            fi
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed!"
+          echo "Please check GitHub Actions logs for details"
+          exit 1
